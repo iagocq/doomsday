@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doomsday trainer</title>
+    <style>
+        .guess-correct {
+            color: lightgreen;
+        }
+        .guess-incorrect {
+            color: lightcoral;
+        }
+    </style>
+</head>
+<body>
+    <p>Year: <span id="year">XXXX</span></p>
+    <p>Play a round by pressing Enter</p>
+    <p>Doomsday: <span id="guess" class="guess-neutral">X</span> (guessed) / <span id="doomsday">X</span> (doomsday)</p>
+    <p>Score: <span id="correct">0</span> / <span id="total">0</span> (<span id="ratio">1</span>)</p>
+    <p>Streak: <span id="streak">0</span></p>
+    <p>Average Time (last 5): <span id="avg-time">0</span>s</p>
+    <p>Last Time: <span id="last-time">0</span>s</p>
+    <script>
+        let stats = {
+            correct: 0,
+            total: 0,
+            streak: 0,
+            times: [],
+            corrects: []
+        };
+
+        let options = {
+            minYear: 1900,
+            maxYear: 2099,
+            sundayIs: 1
+        };
+
+        let state = {
+            year: 0,
+            playing: false,
+            startedAt: 0,
+        };
+
+        function now() {
+            return new Date().getTime() / 1000;
+        }
+
+        document.addEventListener('keypress', ev => {
+            const k = ev.which;
+            const n = k - 0x30;
+            const guessed = state.playing && n >= 0 && n <= 9;
+            if (guessed) {
+                guessDay(n);
+            }
+            if (guessed || k == 10 || k == 13) {
+                state.playing = !state.playing;
+                state.startedAt = now();
+                if (state.playing) {
+                    newRound();
+                }
+            }
+        });
+
+        function guessDay(n) {
+            const time = now() - state.startedAt;
+            const d = getDoomsday(state.year);
+
+            stats.total += 1;
+
+            setContent('guess', n);
+            setContent('doomsday', d);
+
+            const guessEl = getElement('guess');
+
+            const correct = n == d;
+            if (correct) {
+                guessEl.className = 'guess-correct';
+                stats.streak += 1;
+                stats.correct += 1;
+            } else {
+                guessEl.className = 'guess-incorrect';
+                stats.streak = 0;
+            }
+
+            stats.times.push(time);
+            stats.corrects.push(correct);
+
+            saveStats();
+            displayStats();
+        }
+
+        function getDoomsday(year) {
+            const d = new Date(year, 2, 14); // 3/14, Pi Day
+            return d.getDay() + options.sundayIs;
+        }
+
+        function getElement(id) {
+            return document.getElementById(id);
+        }
+
+        function setContent(id, val) {
+            document.getElementById(id).innerText = val;
+        }
+
+        function displayStats() {
+            setContent('correct', stats.correct);
+            setContent('total', stats.total);
+            const ratio = stats.total == 0 ? 1 : (stats.correct / stats.total).toFixed(3);
+            setContent('ratio', ratio);
+            setContent('streak', stats.streak);
+            const n = 5;
+            const nTimes = Math.min(n, stats.times.length);
+            if (nTimes > 0) {
+                const totalTime = stats.times.slice(-n).reduce((p, v) => p + v, 0);
+                const avg = nTimes == 0 ? 0 : (totalTime / nTimes);
+                setContent('avg-time', (totalTime / nTimes).toFixed(2));
+                setContent('last-time', stats.times[stats.times.length-1].toFixed(2));
+            }
+        }
+
+        function loadFromStorage(key) {
+            const st = localStorage.getItem(key);
+            if (st == null) return null;
+            return JSON.parse(st);
+        }
+
+        function saveToStorage(key, val) {
+            localStorage.setItem(key, JSON.stringify(val));
+        }
+
+        function loadStats() {
+            stats = loadFromStorage('doomsday-stats') || stats;
+        }
+
+        function loadOptions() {
+            options = loadFromStorage('doomsday-options') || options;
+        }
+
+        function saveStats() {
+            saveToStorage('doomsday-stats', stats);
+        }
+
+        function saveOptions() {
+            saveToStorage('doomsday-options', options);
+        }
+
+        function newRound() {
+            let yearRange = options.maxYear - options.minYear + 1;
+            state.year = Math.floor(Math.random() * yearRange + options.minYear);
+            setContent('year', state.year);
+            setContent('guess', 'X');
+            setContent('doomsday', 'X');
+            getElement('guess').className = 'guess-neutral';
+        }
+
+        loadStats();
+        loadOptions();
+        displayStats();
+    </script>
+</body>
+</html>
