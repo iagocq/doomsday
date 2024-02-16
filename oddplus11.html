@@ -15,29 +15,35 @@
 </head>
 <body>
     <p>Year: <span id="year">XXXX</span></p>
+    <p>Date: <span id="day">XX</span>/<span id="month">XX</span></p>
     <p>Play a round by pressing Enter</p>
-    <p>Doomsday: <span id="guess" class="guess-neutral">X</span> (guessed) / <span id="doomsday">X</span> (doomsday)</p>
+    <p>Day of Week: <span id="guess" class="guess-neutral">X</span> (guessed) / <span id="correct-dow">X</span> (correct)</p>
     <p>Score: <span id="correct">0</span> / <span id="total">0</span> (<span id="ratio">1</span>)</p>
     <p>Streak: <span id="streak">0</span></p>
     <p>Average Time (last 5): <span id="avg-time">0</span>s</p>
     <p>Last Time: <span id="last-time">0</span>s</p>
+    <input type="checkbox" id="only-doomsday">
+    <label for="only-doomsday">Only guess Doomsday</label>
     <script>
         let stats = {
             correct: 0,
             total: 0,
             streak: 0,
             times: [],
-            corrects: []
+            corrects: [],
+            whens: [],
+            onlyDoomsdays: []
         };
 
         let options = {
             minYear: 1900,
             maxYear: 2099,
-            sundayIs: 1
+            sundayIs: 1,
+            onlyGuessDoomsday: true,
         };
 
         let state = {
-            year: 0,
+            date: 0,
             playing: false,
             startedAt: 0,
         };
@@ -46,34 +52,19 @@
             return new Date().getTime() / 1000;
         }
 
-        document.addEventListener('keypress', ev => {
-            const k = ev.which;
-            const n = k - 0x30;
-            const guessed = state.playing && n >= 0 && n <= 9;
-            if (guessed) {
-                guessDay(n);
-            }
-            if (guessed || k == 10 || k == 13) {
-                state.playing = !state.playing;
-                state.startedAt = now();
-                if (state.playing) {
-                    newRound();
-                }
-            }
-        });
-
-        function guessDay(n) {
+        function guessDay(guess) {
             const time = now() - state.startedAt;
-            const d = getDoomsday(state.year);
+
+            const dayOfWeek = options.onlyGuessDoomsday ? getDoomsday(state.date) : getDayOfWeek(state.date);
 
             stats.total += 1;
 
-            setContent('guess', n);
-            setContent('doomsday', d);
+            setContent('guess', guess);
+            setContent('correct-dow', dayOfWeek);
 
             const guessEl = getElement('guess');
 
-            const correct = n == d;
+            const correct = (guess%7) == dayOfWeek;
             if (correct) {
                 guessEl.className = 'guess-correct';
                 stats.streak += 1;
@@ -84,15 +75,21 @@
             }
 
             stats.times.push(time);
-            stats.corrects.push(correct);
+            stats.corrects.push(+correct);
+            stats.whens.push(Math.floor(state.startedAt));
+            stats.onlyDoomsdays.push(+options.onlyGuessDoomsday);
 
             saveStats();
             displayStats();
         }
+        
+        function getDayOfWeek(date) {
+            return (date.getDay() + options.sundayIs)%7;
+        }
 
-        function getDoomsday(year) {
-            const d = new Date(year, 2, 14); // 3/14, Pi Day
-            return d.getDay() + options.sundayIs;
+        function getDoomsday(date) {
+            const d = new Date(date.getFullYear(), 2, 14); // 3/14, Pi Day
+            return getDayOfWeek(d);
         }
 
         function getElement(id) {
@@ -119,6 +116,10 @@
             }
         }
 
+        function displayOptions() {
+            getElement('only-doomsday').checked = options.onlyGuessDoomsday;
+        }
+
         function loadFromStorage(key) {
             const st = localStorage.getItem(key);
             if (st == null) return null;
@@ -130,11 +131,12 @@
         }
 
         function loadStats() {
-            stats = loadFromStorage('doomsday-stats') || stats;
+            stats = Object.assign(stats, loadFromStorage('doomsday-stats'));
         }
 
         function loadOptions() {
-            options = loadFromStorage('doomsday-options') || options;
+            options = Object.assign(options, loadFromStorage('doomsday-options'));
+            getElement('only-doomsday').checked = options.onlyGuessDoomsday;
         }
 
         function saveStats() {
@@ -145,18 +147,62 @@
             saveToStorage('doomsday-options', options);
         }
 
+        function random(min, max) {
+            const range = max - min;
+            return Math.floor(Math.random() * range + min);
+        }
+
         function newRound() {
-            let yearRange = options.maxYear - options.minYear + 1;
-            state.year = Math.floor(Math.random() * yearRange + options.minYear);
-            setContent('year', state.year);
+            const year = random(options.minYear, options.maxYear+1);
+
+            const isLeapYear = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+            const dateRange = isLeapYear ? 366 : 365;
+            const date = random(0, dateRange);
+
+            const timestamp = new Date(year, 0).getTime() + date * 24 * 3600 * 1000;
+            state.date = new Date(timestamp);
+
+            setContent('year', state.date.getFullYear());
+            if (!options.onlyGuessDoomsday) {
+                setContent('day', state.date.getDate());
+                setContent('month', state.date.getMonth() + 1);
+            } else {
+                setContent('day', 'XX');
+                setContent('month', 'XX');
+            }
+
             setContent('guess', 'X');
-            setContent('doomsday', 'X');
+            setContent('correct-dow', 'X');
             getElement('guess').className = 'guess-neutral';
         }
+
+        document.addEventListener('keypress', ev => {
+            const k = ev.which;
+            const n = k - 0x30;
+            const guessed = state.playing && n >= 0 && n <= 9;
+            if (guessed) {
+                guessDay(n);
+            }
+            if (guessed || k == 10 || k == 13) {
+                state.playing = !state.playing;
+                state.startedAt = now();
+                if (state.playing) {
+                    newRound();
+                }
+            }
+        });
+
+        getElement('only-doomsday').addEventListener('change', ev => {
+            const el = ev.srcElement;
+            options.onlyGuessDoomsday = el.checked;
+            saveOptions();
+            displayOptions();
+        });
 
         loadStats();
         loadOptions();
         displayStats();
+        displayOptions();
     </script>
 </body>
 </html>
