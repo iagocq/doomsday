@@ -5,25 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Doomsday trainer</title>
     <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+        .ib {
+            display: inline-block;
+        }
+        .hidden {
+            display: none !important;
+        }
         .guess-correct {
             color: lightgreen;
         }
         .guess-incorrect {
             color: lightcoral;
         }
+        #virtual-keyboard {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            line-height: 3rem;
+            text-align: center;
+        }
+        #start-stop {
+            grid-column: 1 / -1;
+        }
+        #virtual-keyboard > :first-child > * {
+            border-top: 2px solid black;
+        }
+        #virtual-keyboard > :last-child > * {
+            border-bottom: 0;
+        }
+        .row-wrapper {
+            display: contents;
+        }
+        .row-wrapper > * {
+            border: 1px solid black;
+        }
+        .row-wrapper > :first-child {
+            border-left: 0;
+        }
+        .row-wrapper > :last-child {
+            border-right: 0;
+        }
     </style>
 </head>
 <body>
-    <p>Year: <span id="year">XXXX</span></p>
-    <p>Date: <span id="day">XX</span>/<span id="month">XX</span></p>
-    <p>Play a round by pressing Enter</p>
-    <p>Day of Week: <span id="guess" class="guess-neutral">X</span> (guessed) / <span id="correct-dow">X</span> (correct)</p>
-    <p>Score: <span id="correct">0</span> / <span id="total">0</span> (<span id="ratio">1</span>)</p>
-    <p>Streak: <span id="streak">0</span></p>
-    <p>Average Time (last 5): <span id="avg-time">0</span>s</p>
-    <p>Last Time: <span id="last-time">0</span>s</p>
-    <input type="checkbox" id="only-doomsday">
-    <label for="only-doomsday">Only guess Doomsday</label>
+    <div class="ib">
+        <p>Year: <span id="year">XXXX</span></p>
+        <p>Date: <span id="day">XX</span>/<span id="month">XX</span></p>
+        <p>Play a round by pressing Enter</p>
+        <p>Day of Week: <span id="guess" class="guess-neutral">X</span> (guessed) / <span id="correct-dow">X</span> (correct)</p>
+        <p>Score: <span id="correct">0</span> / <span id="total">0</span> (<span id="ratio">1</span>)</p>
+        <p>Streak: <span id="streak">0</span></p>
+        <p>Average Time (last 5): <span id="avg-time">0</span>s</p>
+        <p>Last Time: <span id="last-time">0</span>s</p>
+        <input type="checkbox" id="only-doomsday">
+        <label for="only-doomsday">Only guess Doomsday</label>
+        <br>
+        <input type="checkbox" name="enable-virtual-keyboard" id="enable-virtual-keyboard">
+        <label for="enable-virtual-keyboard">Virtual Keyboard</label>
+    </div>
+    <div id="virtual-keyboard" class="hidden">
+        <div class="row-wrapper" id="keyb-row-1">
+            <div id="start-stop" class="btn" data-value="s">Start / Stop</div>
+        </div>
+        <div class="row-wrapper" id="keyb-row-2">
+            <div class="btn" data-value="0">0</div>
+            <div class="btn" data-value="1">1</div>
+            <div class="btn" data-value="2">2</div>
+            <div class="btn" data-value="3">3</div>
+        </div>
+        <div class="row-wrapper" id="keyb-row-3">
+            <div class="btn" data-value="4">4</div>
+            <div class="btn" data-value="5">5</div>
+            <div class="btn" data-value="6">6</div>
+            <div class="btn" data-value="7">7</div>
+        </div>
+    </div>
+
     <script>
         let stats = {
             correct: 0,
@@ -39,7 +103,8 @@
             minYear: 1900,
             maxYear: 2099,
             sundayIs: 1,
-            onlyGuessDoomsday: true,
+            onlyGuessDoomsday: false,
+            virtualKeyboard: true,
         };
 
         let state = {
@@ -64,7 +129,7 @@
 
             const guessEl = getElement('guess');
 
-            const correct = (guess%7) == dayOfWeek;
+            const correct = (guess%7) === dayOfWeek;
             if (correct) {
                 guessEl.className = 'guess-correct';
                 stats.streak += 1;
@@ -103,14 +168,14 @@
         function displayStats() {
             setContent('correct', stats.correct);
             setContent('total', stats.total);
-            const ratio = stats.total == 0 ? 1 : (stats.correct / stats.total).toFixed(3);
+            const ratio = stats.total === 0 ? 1 : (stats.correct / stats.total).toFixed(3);
             setContent('ratio', ratio);
             setContent('streak', stats.streak);
             const n = 5;
             const nTimes = Math.min(n, stats.times.length);
             if (nTimes > 0) {
                 const totalTime = stats.times.slice(-n).reduce((p, v) => p + v, 0);
-                const avg = nTimes == 0 ? 0 : (totalTime / nTimes);
+                const avg = nTimes === 0 ? 0 : (totalTime / nTimes);
                 setContent('avg-time', (totalTime / nTimes).toFixed(2));
                 setContent('last-time', stats.times[stats.times.length-1].toFixed(2));
             }
@@ -118,11 +183,13 @@
 
         function displayOptions() {
             getElement('only-doomsday').checked = options.onlyGuessDoomsday;
+            getElement('enable-virtual-keyboard').checked = options.virtualKeyboard;
+            getElement('virtual-keyboard').className = options.virtualKeyboard ? '' : 'hidden';
         }
 
         function loadFromStorage(key) {
             const st = localStorage.getItem(key);
-            if (st == null) return null;
+            if (st === null) return null;
             return JSON.parse(st);
         }
 
@@ -155,7 +222,7 @@
         function newRound() {
             const year = random(options.minYear, options.maxYear+1);
 
-            const isLeapYear = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+            const isLeapYear = year % 4 === 0 && (year % 100 != 0 || year % 400 === 0);
             const dateRange = isLeapYear ? 366 : 365;
             const date = random(0, dateRange);
 
@@ -176,28 +243,51 @@
             getElement('guess').className = 'guess-neutral';
         }
 
-        document.addEventListener('keypress', ev => {
-            const k = ev.which;
+        function handleKeypress(k) {
             const n = k - 0x30;
             const guessed = state.playing && n >= 0 && n <= 9;
             if (guessed) {
                 guessDay(n);
             }
-            if (guessed || k == 10 || k == 13) {
+            if (guessed || k === 10 || k === 13) {
                 state.playing = !state.playing;
                 state.startedAt = now();
                 if (state.playing) {
                     newRound();
                 }
             }
+        }
+
+        document.addEventListener('keypress', ev => {
+            handleKeypress(ev.which);
         });
 
         getElement('only-doomsday').addEventListener('change', ev => {
-            const el = ev.srcElement;
-            options.onlyGuessDoomsday = el.checked;
+            options.onlyGuessDoomsday = ev.srcElement.checked;
             saveOptions();
             displayOptions();
         });
+
+        getElement('enable-virtual-keyboard').addEventListener('change', ev => {
+            options.virtualKeyboard = ev.srcElement.checked;
+            saveOptions();
+            displayOptions();
+        });
+
+        function isNum(v) {
+            return +v === +v;
+        }
+
+        for (let btn of document.getElementsByClassName('btn')) {
+            const val = btn.getAttribute('data-value');
+            let key;
+            if (isNum(val)) {
+                key = +val + 0x30;
+            } else if (val === "s") {
+                key = 13;
+            }
+            btn.addEventListener('click', handleKeypress.bind(null, key));
+        }
 
         loadStats();
         loadOptions();
